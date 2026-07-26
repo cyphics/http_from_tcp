@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 func check(e error) {
@@ -15,17 +16,20 @@ func main() {
 	f, err := os.Open("message.txt")
 	check(err)
 	const ChunkLengh = 8
+
+	var current_line = ""
 	
 	var BytesRead = ChunkLengh
 	chunk := make([]byte, ChunkLengh)
 	for BytesRead == ChunkLengh { 
 		BytesRead, err := f.Read(chunk)
 		check(err)
-		fmt.Printf("read: %s\n", string(chunk[:BytesRead]))
+		current_line += string(chunk[:BytesRead])
+		var split = strings.Split(current_line, "\n")
+		if len(split) > 1 {
+			fmt.Printf("read: %s\n", split[0])
+			current_line = split[1]
+		}
+		// fmt.Println(len(split))
 	}
-	// var data, err =  os.Open("./message.txt")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// fmt.Println(data)
 }
