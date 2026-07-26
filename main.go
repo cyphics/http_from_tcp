@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strings"
 )
@@ -11,9 +12,8 @@ import (
 func check(e error) {
 	if e != nil {
 		if errors.Is(e, io.EOF) {
-			// fmt.Print("EOF")
 		} else {
-			fmt.Print(e)
+			fmt.Printf("ERROR: %s", e)
 			os.Exit(1)
 		}
 	}
@@ -33,7 +33,6 @@ func read_file(f io.ReadCloser, str_chan chan<- string) {
 		var split = strings.Split(current_line, "\n")
 		if len(split) > 1 {
 			str_chan<-split[0]
-			// fmt.Printf("load %s\n", split[0])
 			current_line = split[1]
 		}
 
@@ -50,10 +49,18 @@ func getLinesChannel(f io.ReadCloser) <-chan string {
 }
 
 func main() {
-	f, err := os.Open("message.txt")
+	var listener, err = net.Listen("tcp", "127.0.0.1:42069")
 	check(err)
-	var lines = getLinesChannel(f)
-	for line := range lines {
-		fmt.Printf("read: %s\n", line)
+	defer listener.Close()
+
+	for {
+		var connection, err = listener.Accept()
+		fmt.Println("Connecton accepted.")
+		check(err)
+		var lines = getLinesChannel(connection)
+		for line := range lines {
+			fmt.Println(line)
+		}
+		fmt.Println("Connection closed.")
 	}
 }
