@@ -1,14 +1,25 @@
 package request
 
 import (
-	"HTTP_OVER_TCP/helpers"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"strings"
 )
 
+const bufferSize int = 8
+
+type parserState int
+const(
+	Initialized parserState = iota
+	Done
+)
+
 type Request struct {
+	parsedData string
 	RequestLine RequestLine
+	state parserState
 }
 
 type RequestLine struct {
@@ -47,45 +58,82 @@ func checkHttpVersion(version string) (string, error) {
 	return segs[1], nil
 }
 
-func parseRequestLine(line string) (*RequestLine, error) {
-	reqLine  := RequestLine{}
+func parseRequestLine(line string, request *Request) (int, error) {
+	fmt.Printf("Parsing request line \"%s\"\n", line)
+	reqLine  := RequestLine{} 
 	segments := strings.Split(line, " ")
 	if len(segments) < 3 {
-		return &reqLine, errors.New("not enough parts in request line")
+		return 0, fmt.Errorf("not enough parts in request line \"%s\"", line)
 	}
 	method, err := checkRequestMethod(segments[0])
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	target, err := checkRequestTarget(segments[1])
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	version, err := checkHttpVersion(segments[2])
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	
-
 	reqLine.Method        = method
-	reqLine.RequestTarget = target
 	reqLine.HttpVersion   = version
-	return &reqLine, nil
+	reqLine.RequestTarget = target
+	request.RequestLine   = reqLine
+	request.state = Done
+	return len(line), nil
 }
 
-func RequestFromReader(reader io.Reader) (*Request, error) {
-	content, err := io.ReadAll(reader)
-	helpers.CheckFatal(err, "Error reading content.")
-	req := Request{}
-	lines := strings.Split(string(content), "\r\n")
-	reqLine, err := parseRequestLine(lines[0])
-	if err != nil {
-		return nil, err
+func (r *Request) parse(data []byte) (int, error) {
+	fmt.Printf("Parsing \"%s\"\n", string(data))
+	lines := strings.Split(string(data), "\r\n")
+	if len(lines) < 2 {
+		return 0, nil
 	}
-	// for line := range strings.SplitSeq(string(content), "\r\n") {
-	// 	reqLine := parseRequestLine(line)
-	req.RequestLine = *reqLine
-	//
-	// }
+	return parseRequestLine(lines[0], r)
+}
+
+
+func RequestFromReader(reader io.Reader) (*Request, error) {
+	loopCounter := 0
+	req := Request{}
+	readBuffer := make([]byte, bufferSize, bufferSize)
+	var readIndex = 0
+
+	for req.state == Initialized {
+
+		loopCounter += 1
+		if loopCounter > 100 {
+			log.Fatalf("Infinite loop!")
+		}
+
+		r, err := reader.Read(readBuffer[readIndex:])
+		// fmt.Printf("Current buffer: %s\n", string(readBuffer))
+		readIndex += r
+		if readIndex >= len(readBuffer) {
+			tmpBuffer := make([]byte, 2 * len(readBuffer), 2 * len(readBuffer))
+			copy(tmpBuffer, readBuffer)
+			readBuffer = tmpBuffer
+		}
+		if err != nil {
+			if err == io.EOF {
+				req.state = Done
+				break
+			}
+			return nil, err
+		}
+
+		parsed, err := req.parse(readBuffer[:readIndex])
+		if err != nil {
+			return nil, err
+		}
+		if parsed > 0 {
+			readIndex = 0
+			readBuffer = readBuffer[parsed:]
+		}
+	}
+	fmt.Println("Parsing done.")
 	return &req, nil
 }
