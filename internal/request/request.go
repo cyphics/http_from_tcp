@@ -59,7 +59,6 @@ func checkHttpVersion(version string) (string, error) {
 }
 
 func parseRequestLine(line string, request *Request) (int, error) {
-	fmt.Printf("Parsing request line \"%s\"\n", line)
 	reqLine  := RequestLine{} 
 	segments := strings.Split(line, " ")
 	if len(segments) < 3 {
@@ -87,7 +86,6 @@ func parseRequestLine(line string, request *Request) (int, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	fmt.Printf("Parsing \"%s\"\n", string(data))
 	lines := strings.Split(string(data), "\r\n")
 	if len(lines) < 2 {
 		return 0, nil
@@ -102,16 +100,15 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	readBuffer := make([]byte, bufferSize, bufferSize)
 	var readIndex = 0
 
-	for req.state == Initialized {
+	for req.state != Done {
 
 		loopCounter += 1
 		if loopCounter > 100 {
 			log.Fatalf("Infinite loop!")
 		}
 
-		r, err := reader.Read(readBuffer[readIndex:])
-		// fmt.Printf("Current buffer: %s\n", string(readBuffer))
-		readIndex += r
+		numBytesRead, err := reader.Read(readBuffer[readIndex:])
+		readIndex += numBytesRead
 		if readIndex >= len(readBuffer) {
 			tmpBuffer := make([]byte, 2 * len(readBuffer), 2 * len(readBuffer))
 			copy(tmpBuffer, readBuffer)
@@ -125,15 +122,14 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			return nil, err
 		}
 
-		parsed, err := req.parse(readBuffer[:readIndex])
+		numBytesParsed, err := req.parse(readBuffer[:readIndex])
 		if err != nil {
 			return nil, err
 		}
-		if parsed > 0 {
+		if numBytesParsed > 0 {
 			readIndex = 0
-			readBuffer = readBuffer[parsed:]
+			readBuffer = readBuffer[numBytesParsed:]
 		}
 	}
-	fmt.Println("Parsing done.")
 	return &req, nil
 }
