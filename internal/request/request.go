@@ -86,7 +86,7 @@ func parseRequestLine(line string, request *Request) (int, error) {
 	reqLine.RequestTarget = target
 	request.RequestLine   = reqLine
 	request.state = requestStateParsingHeaders
-	return len(line), nil
+	return len(line)+2, nil // +2 to account for \r\n in original string
 }
 
 func (r *Request) parse(data []byte) (int, error) {
@@ -94,6 +94,7 @@ func (r *Request) parse(data []byte) (int, error) {
 	if len(lines) < 2 {
 		return 0, nil
 	}
+
 	// fmt.Printf("First: %s\nSecond: %s", lines[0], lines[1])
 	if r.state == requestStateInitialized {
 		return parseRequestLine(lines[0], r)
