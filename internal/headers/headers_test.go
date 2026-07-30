@@ -56,4 +56,32 @@ func TestRequestLineParse(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
+
+	// TEST: Invalid spacing after head
+	headers = NewHeaders()
+	data = []byte("Host : localhost:42069\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	require.Error(t, err)
+	assert.Equal(t, 0, n)
+	assert.False(t, done)
+
+
+	// TEST: Invalid character
+	headers = NewHeaders()
+	data = []byte("H@st: localhost:42069\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	require.Error(t, err)
+	assert.Equal(t, 0, n)
+	assert.False(t, done)
+
+	// TEST Valid multiple values for same key
+	headers = NewHeaders()
+	data = []byte("Set-Person: lane-loves-go")
+	n, done, err = headers.Parse([]byte("Set-Person: lane-loves-go"))
+	n, done, err = headers.Parse([]byte("Set-Person: prime-loves-zig \r\n"))
+	n, done, err = headers.Parse([]byte("Set-Person: tj-loves-ocaml \r\n"))
+	require.NoError(t, err)
+	assert.Equal(t, 28, n)
+	assert.False(t, done)
+	assert.Equal(t, "lane-loves-go; prime-loves-zig; tj-loves-ocaml", headers["set-person"])
 }

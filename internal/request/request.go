@@ -6,19 +6,21 @@ import (
 	"io"
 	"log"
 	"strings"
+	"http_from_tcp/internal/headers"
 )
 
 const bufferSize int = 8
 
 type parserState int
 const(
-	Initialized parserState = iota
-	Done
+	requestStateInitialized parserState = iota
+	requestStateParsingHeaders
+	requestStateDone
 )
 
 type Request struct {
-	parsedData string
 	RequestLine RequestLine
+	Headers headers.Headers
 	state parserState
 }
 
@@ -30,6 +32,8 @@ type RequestLine struct {
 
 func buildRequest() *Request {
 	req := Request{}
+	req.Headers = headers.NewHeaders()
+	req.state = requestStateInitialized
 	return &req
 }
 
@@ -81,7 +85,7 @@ func parseRequestLine(line string, request *Request) (int, error) {
 	reqLine.HttpVersion   = version
 	reqLine.RequestTarget = target
 	request.RequestLine   = reqLine
-	request.state = Done
+	request.state = requestStateParsingHeaders
 	return len(line), nil
 }
 
@@ -90,17 +94,26 @@ func (r *Request) parse(data []byte) (int, error) {
 	if len(lines) < 2 {
 		return 0, nil
 	}
-	return parseRequestLine(lines[0], r)
+	// fmt.Printf("First: %s\nSecond: %s", lines[0], lines[1])
+	if r.state == requestStateInitialized {
+		return parseRequestLine(lines[0], r)
+	} else {
+		parsedBytes, done, err := r.Headers.Parse(data)
+		if done {
+			r.state = requestStateDone
+		}
+		return parsedBytes, err
+	}
 }
 
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	loopCounter := 0
-	req := Request{}
+	req := buildRequest()
 	readBuffer := make([]byte, bufferSize, bufferSize)
 	var readIndex = 0
 
-	for req.state != Done {
+	for req.state != requestStateDone {
 
 		loopCounter += 1
 		if loopCounter > 100 {
@@ -110,13 +123,13 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		numBytesRead, err := reader.Read(readBuffer[readIndex:])
 		readIndex += numBytesRead
 		if readIndex >= len(readBuffer) {
-			tmpBuffer := make([]byte, 2 * len(readBuffer), 2 * len(readBuffer))
+			tmpBuffer := make([]byte, 2 * len(readBuffer))
 			copy(tmpBuffer, readBuffer)
 			readBuffer = tmpBuffer
 		}
 		if err != nil {
 			if err == io.EOF {
-				req.state = Done
+				req.state = requestStateDone
 				break
 			}
 			return nil, err
@@ -127,9 +140,12 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			return nil, err
 		}
 		if numBytesParsed > 0 {
-			readIndex = 0
-			readBuffer = readBuffer[numBytesParsed:]
+			readIndex -= numBytesParsed
+			tmpBuffer := make([]byte, len(readBuffer), len(readBuffer))
+
+			copy(tmpBuffer, readBuffer[numBytesParsed:])
+			readBuffer = tmpBuffer
 		}
 	}
-	return &req, nil
+	return req, nil
 }
