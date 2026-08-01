@@ -32,12 +32,14 @@ func main() {
 			fmt.Printf("Error reading request: %s\n", err.Error())
 		}
 		reqLine := req.RequestLine
-		fmt.Printf("Requestion line:\n- Method: %s\n- Target: %s\n- Verstion: %s\n", reqLine.Method, reqLine.RequestTarget, reqLine.HttpVersion)
+		fmt.Printf("Requestion line:\n- Method: %s\n- Target: %s\n- Verstion: %s\n", reqLine.Method, reqLine.RequestTarget, reqLine.HTTPVersion)
 		fmt.Println("Headers:")
 		headers := req.Headers
 		for k, v := range headers {
 			fmt.Printf("- %s: %s\n", k, v)
 		}
+		fmt.Println("Body:")
+		fmt.Println(string(req.Body))
 		fmt.Println("Connection to ", conn.RemoteAddr(), "closed")
 	}
 }
