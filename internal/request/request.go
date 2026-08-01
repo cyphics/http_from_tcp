@@ -3,11 +3,11 @@ package request
 import (
 	"errors"
 	"fmt"
+	"http_from_tcp/internal/headers"
 	"io"
 	"log"
-	"strings"
 	"strconv"
-	"http_from_tcp/internal/headers"
+	"strings"
 )
 
 const bufferSize int = 8
@@ -99,15 +99,6 @@ func (r *Request) parseRequestLine(data []byte) (int, error) {
 
 func (r *Request) parseBody(data []byte) (int, error) {
 	r.Body = append(r.Body, data...)
-	currentStr, _ := r.Headers.Get("content-length")
-	current, err := strconv.Atoi(currentStr)
-	if err != nil {
-		return 0, err
-	}
-	r.Headers["content-length"] = strconv.Itoa(len(data) + current)
-	if strings.HasSuffix(string(data), "\n") {
-		r.state = StateDone
-	}
 	return len(data), nil
 }
 
@@ -129,6 +120,12 @@ func (r *Request) parse(data []byte) (int, error) {
 			totalBytesRead += bytesRead
 			if done {
 				r.state = StateBody
+				_, hasBody := r.Headers.Get("content-length")
+				if hasBody {
+					r.state = StateBody
+				} else {
+					r.state = StateDone
+				}
 			}
 		case StateBody:
 			bytesRead, err = r.parseBody(data[totalBytesRead:])
@@ -192,10 +189,23 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			readBuffer = tmpBuffer
 		}
 		if eof {
-			if req.state != StateDone {
-				return req, fmt.Errorf("EOF reached while in incomplete parsing state (current: %s)", req.state)
+			if req.state == StateDone { return req, nil }
+			if req.state == StateHeaders { return req, errors.New("incomplete headers") }
+			if req.state == StateBody {
+				contentLengthStr,_ := req.Headers.Get("content-length")
+				contentLength, err := strconv.Atoi(contentLengthStr)
+				if err != nil {
+					return req, err
+				}
+				if contentLength > len(req.Body) {
+					return req, errors.New("incomplete body")
+				}
+				if contentLength < len(req.Body) {
+					return req, errors.New("body longer than expected")
+				}
+				return req, nil
 			}
-			return req, nil
+			return req, errors.New("state error")
 		}
 	}
 	return req, nil
