@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"strconv"
 	"http_from_tcp/internal/headers"
 )
 
@@ -97,10 +98,21 @@ func (r *Request) parseRequestLine(data []byte) (int, error) {
 }
 
 func (r *Request) parseBody(data []byte) (int, error) {
-	return 0, nil
+	r.Body = append(r.Body, data...)
+	currentStr, _ := r.Headers.Get("content-length")
+	current, err := strconv.Atoi(currentStr)
+	if err != nil {
+		return 0, err
+	}
+	r.Headers["content-length"] = strconv.Itoa(len(data) + current)
+	if strings.HasSuffix(string(data), "\n") {
+		r.state = StateDone
+	}
+	return len(data), nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
+	// fmt.Printf("parsing chunk '%s'\n", data)
 	var err error
 	totalBytesRead := 0
 	bytesRead      := 0
@@ -119,7 +131,9 @@ func (r *Request) parse(data []byte) (int, error) {
 				r.state = StateBody
 			}
 		case StateBody:
-			return r.parseBody(data[totalBytesRead:])
+			bytesRead, err = r.parseBody(data[totalBytesRead:])
+			totalBytesRead += bytesRead
+			return totalBytesRead, err
 		default:
 			return 0, fmt.Errorf("parsing state error")
 		}
@@ -178,7 +192,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			readBuffer = tmpBuffer
 		}
 		if eof {
-			if req.state == StateHeaders {
+			if req.state != StateDone {
 				return req, fmt.Errorf("EOF reached while in incomplete parsing state (current: %s)", req.state)
 			}
 			return req, nil
