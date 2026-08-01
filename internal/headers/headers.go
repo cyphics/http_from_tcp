@@ -23,29 +23,29 @@ func checkFieldName(name string) error {
 	return nil
 }
 
+// Parse takes a chunk of bytes and attempts to parse next header line if exists
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
-	fmt.Printf("Parses new header sequence \"%s\"\n\n", data)
-	done = false
-	fieldLines := strings.Split(string(data), "\r\n")
-	if len(fieldLines) < 2 {
+
+	if strings.HasPrefix(string(data), "\r\n") {
+		return 2, true, nil
+	}
+	fieldLine, _, found := strings.Cut(string(data), "\r\n")
+	if !found {
 		return 0, false, nil
 	}
-	if len(fieldLines[0]) == 0 {
-		done = true
-	}
-	fieldLine := fieldLines[0]
+	// fmt.Printf("Parsing header segment \"%s\"\n", fieldLine)
 	parsedBytes := len(fieldLine) 
 	if len(fieldLine) > 0 {
 		if fieldLine[0] == ' ' {
-			return 0, done, errors.New("whitespace not allowed at beginning of line")
+			return 0, false, errors.New("whitespace not allowed at beginning of line")
 		}
 		fieldKey, fieldValue, _ := strings.Cut(fieldLine, ":")
 		if fieldKey[len(fieldKey)-1] == ' ' {
-			return 0, done, errors.New("whitespace not allowed between key and ':'")
+			return 0, false, errors.New("whitespace not allowed between key and ':'")
 		}
 		err = checkFieldName(fieldKey)
 		if err != nil {
-			return 0, done, err
+			return 0, false, err
 		}
 		fieldValue = strings.Trim(fieldValue, " ")
 		fieldKey = strings.ToLower(fieldKey)
@@ -55,7 +55,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		} else {
 			h[fieldKey] = fieldValue
 		}
-		fmt.Printf("Parsed sequence %s (%d)\n", fieldLine, parsedBytes)
+		// fmt.Printf("Parsed sequence %s (%d)\n", fieldLine, parsedBytes)
 	}
-	return parsedBytes + 2, done, nil
+	return parsedBytes+2, false, nil
 }

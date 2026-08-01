@@ -13,19 +13,21 @@ const bufferSize int = 8
 
 type parserState int
 const(
-	requestStateInitialized parserState = iota
-	requestStateParsingHeaders
-	requestStateDone
+	StateInit parserState = iota
+	StateHeaders
+	StateBody
+	StateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
-	Headers headers.Headers
-	state parserState
+	Headers     headers.Headers
+	Body        []byte
+	state       parserState
 }
 
 type RequestLine struct {
-	HttpVersion   string
+	HTTPVersion   string
 	RequestTarget string
 	Method        string
 }
@@ -33,7 +35,7 @@ type RequestLine struct {
 func buildRequest() *Request {
 	req := Request{}
 	req.Headers = headers.NewHeaders()
-	req.state = requestStateInitialized
+	req.state = StateInit
 	return &req
 }
 
@@ -62,7 +64,12 @@ func checkHttpVersion(version string) (string, error) {
 	return segs[1], nil
 }
 
-func parseRequestLine(line string, request *Request) (int, error) {
+func (r *Request) parseRequestLine(data []byte) (int, error) {
+	line, _, found := strings.Cut(string(data), "\r\n")
+	if !found {
+		return 0, nil
+	}
+	// fmt.Printf("Parsing request line '%s'\n", line)
 	reqLine  := RequestLine{} 
 	segments := strings.Split(line, " ")
 	if len(segments) < 3 {
@@ -82,45 +89,63 @@ func parseRequestLine(line string, request *Request) (int, error) {
 	}
 	
 	reqLine.Method        = method
-	reqLine.HttpVersion   = version
+	reqLine.HTTPVersion   = version
 	reqLine.RequestTarget = target
-	request.RequestLine   = reqLine
-	request.state = requestStateParsingHeaders
-	return len(line)+2, nil // +2 to account for \r\n in original string
+	r.RequestLine   = reqLine
+	r.state = StateHeaders
+	return len(line)+2, nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	lines := strings.Split(string(data), "\r\n")
-	if len(lines) < 2 {
-		return 0, nil
-	}
+	var err error
+	totalBytesRead := 0
+	bytesRead      := 0
+	done           := false
 
-	// fmt.Printf("First: %s\nSecond: %s", lines[0], lines[1])
-	if r.state == requestStateInitialized {
-		return parseRequestLine(lines[0], r)
-	} else {
-		parsedBytes, done, err := r.Headers.Parse(data)
-		if done {
-			r.state = requestStateDone
+	for r.state != StateDone {
+
+		switch r.state {
+		case StateInit:
+			bytesRead, err = r.parseRequestLine(data[totalBytesRead:])
+			totalBytesRead += bytesRead
+		case StateHeaders:
+			bytesRead, done, err = r.Headers.Parse(data[totalBytesRead:])
+			totalBytesRead += bytesRead
+			if done {
+				r.state = StateDone
+			}
+		// case StateBody:
+		// 	return r.parseBody(lines[0])
+		default:
+			return 0, fmt.Errorf("we did something wrong")
 		}
-		return parsedBytes, err
+
+		if err != nil {
+			return totalBytesRead, err
+		}
+		if bytesRead == 0 {
+			return totalBytesRead, nil
+		}
 	}
+	return totalBytesRead, nil
 }
 
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	loopCounter := 0
-	req := buildRequest()
-	readBuffer := make([]byte, bufferSize, bufferSize)
+	req         := buildRequest()
+	readBuffer  := make([]byte, bufferSize)
+	eof         := false
 	var readIndex = 0
 
-	for req.state != requestStateDone {
+	for req.state != StateDone {
 
 		loopCounter += 1
 		if loopCounter > 100 {
 			log.Fatalf("Infinite loop!")
 		}
 
+		// Read into the buffer
 		numBytesRead, err := reader.Read(readBuffer[readIndex:])
 		readIndex += numBytesRead
 		if readIndex >= len(readBuffer) {
@@ -129,23 +154,27 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			readBuffer = tmpBuffer
 		}
 		if err != nil {
+			// If error is EOF, parse before treating the result
 			if err == io.EOF {
-				req.state = requestStateDone
-				break
+				eof = true
+			} else {
+				return nil, err
 			}
-			return nil, err
 		}
 
+		// Parse from the buffer
 		numBytesParsed, err := req.parse(readBuffer[:readIndex])
 		if err != nil {
 			return nil, err
 		}
 		if numBytesParsed > 0 {
 			readIndex -= numBytesParsed
-			tmpBuffer := make([]byte, len(readBuffer), len(readBuffer))
-
+			tmpBuffer := make([]byte, len(readBuffer))
 			copy(tmpBuffer, readBuffer[numBytesParsed:])
 			readBuffer = tmpBuffer
+		}
+		if eof && req.state != StateDone {
+			return req, errors.New("EOF before complete request")
 		}
 	}
 	return req, nil

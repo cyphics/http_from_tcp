@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequestLineParse(t *testing.T) {
+func TestHeaders(t *testing.T) {
 	// TEST: Valid single header
 	headers := NewHeaders()
 	data := []byte("Host: localhost:42069\r\n\r\n")
@@ -76,10 +76,9 @@ func TestRequestLineParse(t *testing.T) {
 
 	// TEST Valid multiple values for same key
 	headers = NewHeaders()
-	data = []byte("Set-Person: lane-loves-go")
-	n, done, err = headers.Parse([]byte("Set-Person: lane-loves-go"))
-	n, done, err = headers.Parse([]byte("Set-Person: prime-loves-zig \r\n"))
-	n, done, err = headers.Parse([]byte("Set-Person: tj-loves-ocaml \r\n"))
+	n, done, err = headers.Parse([]byte("Set-Person: lane-loves-go\r\n"))
+	n, done, err = headers.Parse([]byte("Set-Person: prime-loves-zig\r\n"))
+	n, done, err = headers.Parse([]byte("Set-Person: tj-loves-ocaml\r\n"))
 	require.NoError(t, err)
 	assert.Equal(t, 28, n)
 	assert.False(t, done)
