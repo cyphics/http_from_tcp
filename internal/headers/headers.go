@@ -49,7 +49,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		}
 		fieldValue = strings.Trim(fieldValue, " ")
 		fieldKey = strings.ToLower(fieldKey)
-		old, exists := h[fieldKey]
+		old, exists := h.Get(fieldKey)
 		if exists {
 			h[fieldKey] = old + "; " + fieldValue
 		} else {
@@ -58,4 +58,10 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		// fmt.Printf("Parsed sequence %s (%d)\n", fieldLine, parsedBytes)
 	}
 	return parsedBytes+2, false, nil
+}
+
+// Get returns the value of the header key, ensuring lower case
+func (h Headers) Get(key string) (string, bool)  {
+	value, exists := h[strings.ToLower(key)]
+	return value, exists
 }

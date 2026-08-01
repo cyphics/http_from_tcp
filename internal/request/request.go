@@ -11,12 +11,12 @@ import (
 
 const bufferSize int = 8
 
-type parserState int
+type parserState string
 const(
-	StateInit parserState = iota
-	StateHeaders
-	StateBody
-	StateDone
+	StateInit    parserState = "StateInit"
+	StateHeaders parserState = "StateHeaders"
+	StateBody    parserState = "StateBody"
+	StateDone    parserState = "StateDone"
 )
 
 type Request struct {
@@ -96,6 +96,10 @@ func (r *Request) parseRequestLine(data []byte) (int, error) {
 	return len(line)+2, nil
 }
 
+func (r *Request) parseBody(data []byte) (int, error) {
+	return 0, nil
+}
+
 func (r *Request) parse(data []byte) (int, error) {
 	var err error
 	totalBytesRead := 0
@@ -112,12 +116,12 @@ func (r *Request) parse(data []byte) (int, error) {
 			bytesRead, done, err = r.Headers.Parse(data[totalBytesRead:])
 			totalBytesRead += bytesRead
 			if done {
-				r.state = StateDone
+				r.state = StateBody
 			}
-		// case StateBody:
-		// 	return r.parseBody(lines[0])
+		case StateBody:
+			return r.parseBody(data[totalBytesRead:])
 		default:
-			return 0, fmt.Errorf("we did something wrong")
+			return 0, fmt.Errorf("parsing state error")
 		}
 
 		if err != nil {
@@ -173,8 +177,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			copy(tmpBuffer, readBuffer[numBytesParsed:])
 			readBuffer = tmpBuffer
 		}
-		if eof && req.state != StateDone {
-			return req, errors.New("EOF before complete request")
+		if eof {
+			if req.state == StateHeaders {
+				return req, fmt.Errorf("EOF reached while in incomplete parsing state (current: %s)", req.state)
+			}
+			return req, nil
 		}
 	}
 	return req, nil
