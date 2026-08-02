@@ -13,6 +13,10 @@ func NewHeaders() Headers {
 	return make(Headers)
 }
 
+func (h Headers) Replace(key string, value string) {
+	h[strings.ToLower(key)] = value
+}
+
 func checkFieldName(name string) error {
 	valid_chars := "!#$%&'*+-.^_`|~"
 	for _, char := range name {

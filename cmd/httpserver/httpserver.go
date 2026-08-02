@@ -53,7 +53,9 @@ func handler (w *response.Writer, req *request.Request) {
 </html>`
 	}
 	w.WriteStatusLine(status)
-	w.WriteHeaders(response.GetDefaultHeaders(len(msg)))
+	headers := response.GetDefaultHeaders(len(msg))
+	headers.Replace("content-type", "text/html")
+	w.WriteHeaders(headers)
 	w.WriteBody([]byte(msg))
 }
 
