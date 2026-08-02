@@ -10,14 +10,20 @@ import (
 	"net"
 )
 
-type Server struct{
+type Server struct {
 	listener net.Listener
-	handler Handler
+	handler  Handler
 }
 
 type HandlerError struct {
 	StatusCode response.StatusCode
 	Message    string
+}
+
+func (h *HandlerError) Write(conn net.Conn) {
+	defer conn.Close()
+	response.WriteStatusLine(conn, h.StatusCode)
+	response.WriteHeaders(conn, response.GetDefaultHeaders(0))
 }
 
 type Handler func(w io.Writer, req *request.Request) *HandlerError
@@ -29,38 +35,47 @@ func (s *Server) listen() {
 			log.Fatalf("error: %s\n", err.Error())
 		}
 		fmt.Println("Accepted connection from", conn.RemoteAddr())
-		s.handle(conn)
+		go s.handle(conn)
 	}
 }
 
 func (s *Server) handle(conn net.Conn) {
+	defer conn.Close()
 	request, err := request.RequestFromReader(conn)
-	if err != nil { fmt.Printf("Error parsing request: %s\n", err) }
+	if err != nil {
+		hErr := &HandlerError{
+			StatusCode: response.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		hErr.Write(conn)
+		return
+	}
 
 	writeBuffer := new(bytes.Buffer)
 	handErr := s.handler(writeBuffer, request)
-	err = response.WriteStatusLine(conn, handErr.StatusCode)
+	if handErr != nil {
+		handErr.Write(conn)
+		return
+	}
+	err = response.WriteStatusLine(conn, response.StatusOK)
 	if err != nil { fmt.Printf("Error writing status line: %s\n", err) }
-	err = response.WriteHeaders(conn, response.GetDefaultHeaders(0))
+	buff := writeBuffer.Bytes()
+	err = response.WriteHeaders(conn, response.GetDefaultHeaders(len(buff)))
 	if err != nil { fmt.Printf("Error handling request: %s\n", err) }
-	conn.Write(writeBuffer.Bytes())
-	conn.Close()
+	conn.Write(buff)
 }
 
-
-func Serve(handler Handler, port int) (*Server, error){
+func Serve(handler Handler, port int) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
 	server := Server{listener: listener, handler: handler}
-	go func() {
-		server.listen()
-	}()
+	go server.listen()
 	return &server, nil
 }
 
-func (s *Server)Close() {
+func (s *Server) Close() {
 	log.Println("closing server")
 	err := s.listener.Close()
 	if err != nil {

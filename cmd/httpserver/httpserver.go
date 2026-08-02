@@ -28,10 +28,7 @@ func handler (w io.Writer, req *request.Request) *server.HandlerError {
 	}
 
 	w.Write([]byte("All good, frfr\n"))
-	return &server.HandlerError{
-		StatusCode: response.StatusOK, 
-		Message: "",
-	}
+	return nil
 }
 
 func main() {
