@@ -77,17 +77,11 @@ func (r *Request) parseRequestLine(data []byte) (int, error) {
 		return 0, fmt.Errorf("not enough parts in request line \"%s\"", line)
 	}
 	method, err := checkRequestMethod(segments[0])
-	if err != nil {
-		return 0, err
-	}
+	if err != nil { return 0, err }
 	target, err := checkRequestTarget(segments[1])
-	if err != nil {
-		return 0, err
-	}
+	if err != nil { return 0, err }
 	version, err := checkHttpVersion(segments[2])
-	if err != nil {
-		return 0, err
-	}
+	if err != nil { return 0, err }
 	
 	reqLine.Method        = method
 	reqLine.HTTPVersion   = version
@@ -135,9 +129,7 @@ func (r *Request) parse(data []byte) (int, error) {
 			return 0, fmt.Errorf("parsing state error")
 		}
 
-		if err != nil {
-			return totalBytesRead, err
-		}
+		if err != nil { return totalBytesRead, err }
 		if bytesRead == 0 {
 			return totalBytesRead, nil
 		}
@@ -179,9 +171,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		// Parse from the buffer
 		numBytesParsed, err := req.parse(readBuffer[:readIndex])
-		if err != nil {
-			return nil, err
-		}
+		if err != nil { return nil, err }
 		if numBytesParsed > 0 {
 			readIndex -= numBytesParsed
 			tmpBuffer := make([]byte, len(readBuffer))
@@ -194,9 +184,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			if req.state == StateBody {
 				contentLengthStr,_ := req.Headers.Get("content-length")
 				contentLength, err := strconv.Atoi(contentLengthStr)
-				if err != nil {
-					return req, err
-				}
+				if err != nil { return req, err }
 				if contentLength > len(req.Body) {
 					return req, errors.New("incomplete body")
 				}

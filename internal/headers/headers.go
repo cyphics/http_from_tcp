@@ -48,9 +48,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 			return 0, false, errors.New("whitespace not allowed between key and ':'")
 		}
 		err = checkFieldName(fieldKey)
-		if err != nil {
-			return 0, false, err
-		}
+		if err != nil { return 0, false, err }
 		fieldValue = strings.Trim(fieldValue, " ")
 		fieldKey = strings.ToLower(fieldKey)
 		old, exists := h.Get(fieldKey)

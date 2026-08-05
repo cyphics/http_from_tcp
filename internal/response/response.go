@@ -71,9 +71,7 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 		_, err = fmt.Fprintf(w, "%s: %s\n", k, v)
 	}
 	_, err = fmt.Fprint(w, "\n")
-	if err != nil {
-		log.Fatalf("Error writing headers: %s\n", err)
-	}
+	if err != nil { log.Fatalf("Error writing headers: %s\n", err) }
 	w.state = WriterStateBody
 	return err
 }
@@ -85,4 +83,9 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	return w.Write(p)
 }
 
-
+func (w *Writer) WriteChunkedBody(p []byte) (int,error) {
+	return fmt.Fprintf(w, "%x\n%s\n", len(p), p)
+}
+func (w *Writer) WriteChunkedBodyDone() (int,error) {
+	return fmt.Fprintf(w, "%x\n\n", 0)
+}
