@@ -63,7 +63,6 @@ func handler (w *response.Writer, req *request.Request) {
 }
 
 func chunkHanlder(w *response.Writer, req *request.Request) {
-	fmt.Println("Using chunkHandler")
 	target := req.RequestLine.RequestTarget
 	if strings.HasPrefix(target, "/httpbin") {
 		path := strings.TrimPrefix(target, "/httpbin")
@@ -82,10 +81,10 @@ func chunkHanlder(w *response.Writer, req *request.Request) {
 			headers["transfer-encoding"] = "chunked"
 			w.WriteHeaders(headers)
 			w.WriteChunkedBody(buffer[:n])
-			fmt.Printf("buffer: \n%s\n", buffer[:n])
+			// fmt.Printf("buffer: \n%s\n", buffer[:n])
 			if err == io.EOF {
-				fmt.Printf("Last buffer\n%s\n", buffer[:n])
-				fmt.Println("Write Chunked Body Done!")
+				// fmt.Printf("Last buffer\n%s\n", buffer[:n])
+				// fmt.Println("Write Chunked Body Done!")
 				w.WriteChunkedBodyDone() 
 				break
 			}
@@ -93,7 +92,7 @@ func chunkHanlder(w *response.Writer, req *request.Request) {
 	} else {
 		handler(w, req)
 	}
-	fmt.Println("Finished handling request")
+	// fmt.Println("Finished handling request")
 }
 func main() {
 	server, err := server.Serve(chunkHanlder, port)

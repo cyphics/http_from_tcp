@@ -41,11 +41,11 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	case StatusOK:
 		_, err = fmt.Fprintf(w, "HTTP/1.1 %d OK\r\n", statusCode)
 	case StatusBadRequest:
-		_, err = fmt.Fprintf(w, "HTTP/1.1 %d Bad Request\n", statusCode)
+		_, err = fmt.Fprintf(w, "HTTP/1.1 %d Bad Request\r\n", statusCode)
 	case StatusInternalError:
-		_, err = fmt.Fprintf(w, "HTTP/1.1 %d Internal Server Error\n", statusCode)
+		_, err = fmt.Fprintf(w, "HTTP/1.1 %d Internal Server Error\r\n", statusCode)
 	default:
-		_, err = fmt.Fprintf(w, "HTTP/1.1 %d", statusCode)
+		_, err = fmt.Fprintf(w, "HTTP/1.1 %d\r\n", statusCode)
 	}
 	w.state = WriterStateHeaders
 	return err
@@ -68,9 +68,9 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	}
 	var err error
 	for k, v := range headers {
-		_, err = fmt.Fprintf(w, "%s: %s\n", k, v)
+		_, err = fmt.Fprintf(w, "%s: %s\r\n", k, v)
 	}
-	_, err = fmt.Fprint(w, "\n")
+	_, err = fmt.Fprint(w, "\r\n")
 	if err != nil { log.Fatalf("Error writing headers: %s\n", err) }
 	w.state = WriterStateBody
 	return err
@@ -84,8 +84,8 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 }
 
 func (w *Writer) WriteChunkedBody(p []byte) (int,error) {
-	return fmt.Fprintf(w, "%x\n%s\n", len(p), p)
+	return fmt.Fprintf(w, "%x\r\n%s\r\n", len(p), p)
 }
 func (w *Writer) WriteChunkedBodyDone() (int,error) {
-	return fmt.Fprintf(w, "%x\n\n", 0)
+	return fmt.Fprintf(w, "%x\r\n\r\n", 0)
 }
