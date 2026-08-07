@@ -53,7 +53,11 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
 	headers := headers.NewHeaders()
-	headers["Content-Length"] = fmt.Sprintf("%d", contentLen)
+	if contentLen > 0 {
+		headers["Content-Length"] = fmt.Sprintf("%d", contentLen)
+	} else {
+		delete(headers, "Content-Length")
+	}
 	headers["Connection"] = "close"
 	headers["content-type"] = "text/plain"
 	return headers
@@ -86,6 +90,13 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 func (w *Writer) WriteChunkedBody(p []byte) (int,error) {
 	return fmt.Fprintf(w, "%x\r\n%s\r\n", len(p), p)
 }
+
 func (w *Writer) WriteChunkedBodyDone() (int,error) {
+	fmt.Println("Body done")
 	return fmt.Fprintf(w, "%x\r\n\r\n", 0)
+}
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	
+	return nil
 }

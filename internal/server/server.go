@@ -33,7 +33,6 @@ func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 	request, err := request.RequestFromReader(conn)
 	if err != nil { return }
-
 	writeBuffer := response.Writer{}
 	s.handler(&writeBuffer, request)
 	conn.Write(writeBuffer.Buffer.Bytes())
