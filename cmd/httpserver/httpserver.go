@@ -64,15 +64,10 @@ func basicHandler (w *response.Writer, req *request.Request) {
 	w.WriteBody([]byte(msg))
 }
 
-func chunkedHandler(w *response.Writer, res *http.Response) {
-	fmt.Println("Handling chunks")
-	headers := response.GetDefaultHeaders(0)
-	headers.Replace("content-type", "application/json")
-	headers["transfer-encoding"] = "chunked"
-	w.WriteHeaders(headers)
+func handleChunkedBody(w *response.Writer, body *io.ReadCloser) {
 	buffer := make([]byte, 1024)
 	for {
-		n, err := res.Body.Read(buffer)
+		n, err := body.Read(buffer)
 		if err != nil && err != io.EOF { 
 			log.Fatalf("Error reading from httpbin response: %s\n", err.Error()) 
 		}
@@ -84,17 +79,30 @@ func chunkedHandler(w *response.Writer, res *http.Response) {
 		}
 	}
 }
+func chunkedHandler(w *response.Writer, res *http.Response) {
+	fmt.Println("Handling chunks")
+	headers := response.GetDefaultHeaders(0)
+	headers.Replace("content-type", "application/json")
+	headers["transfer-encoding"] = "chunked"
+	w.WriteHeaders(headers)
+	body := res.Body
+	handleChunkedBody(w, body)
+}
 
 func trailerHandler(w *response.Writer, res *http.Response) {
 	fmt.Println("Handling trailers")
 	heads := response.GetDefaultHeaders(0)
 	heads.Replace("content-type", "text/plain")
+	headers["transfer-encoding"] = "chunked"
 	heads["trailer"] = "X-Content-SHA256, X-Content-Length"
 	w.WriteHeaders(heads)
 	buffer := make([]byte, 4096)
-	res.Body.Read(buffer)
+	r, err := res.Body.Read(buffer)
+	if err != nil {
+		fmt.Errorf("Error reading body: ", err)
+	}
 	// fmt.Printf("Writing buffer: \n%s\n", buffer)
-	w.WriteBody(buffer)
+	w.WriteBody(buffer[:r])
 	sha := sha256.Sum256(buffer)
 	trailers := headers.NewHeaders()
 	trailers["X-Content-Length"] = fmt.Sprintf("%d", len(buffer))
