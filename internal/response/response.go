@@ -20,6 +20,8 @@ const(
 	WriterStateStatusLine WriterState = iota
 	WriterStateHeaders
 	WriterStateBody
+	WriterStateTrailers
+	WriterStateDone
 )
 
 type Writer struct {
@@ -70,12 +72,7 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	if w.state == WriterStateBody {
 		return errors.New("body expected")
 	}
-	var err error
-	for k, v := range headers {
-		_, err = fmt.Fprintf(w, "%s: %s\r\n", k, v)
-	}
-	_, err = fmt.Fprint(w, "\r\n")
-	if err != nil { log.Fatalf("Error writing headers: %s\n", err) }
+	err := w.WriteMap(headers)
 	w.state = WriterStateBody
 	return err
 }
@@ -91,12 +88,32 @@ func (w *Writer) WriteChunkedBody(p []byte) (int,error) {
 	return fmt.Fprintf(w, "%x\r\n%s\r\n", len(p), p)
 }
 
-func (w *Writer) WriteChunkedBodyDone() (int,error) {
+func (w *Writer) WriteChunkedBodyDone(isTrailer bool) (int,error) {
 	fmt.Println("Body done")
-	return fmt.Fprintf(w, "%x\r\n\r\n", 0)
+	if isTrailer {
+		w.state = WriterStateTrailers
+		return fmt.Fprintf(w, "%x\r\n", 0)
+	} else {
+		w.state = WriterStateDone
+		return fmt.Fprintf(w, "%x\r\n\r\n", 0)
+	}
 }
 
-func (w *Writer) WriteTrailers(h headers.Headers) error {
-	
-	return nil
+func (w *Writer) WriteTrailers(trailers headers.Headers) error {
+	if w.state != WriterStateTrailers {
+		return errors.New("not ready to write tailers")
+	}
+	w.state = WriterStateDone
+	err := w.WriteMap(trailers)
+	return err
+}
+
+func (w *Writer) WriteMap(heads headers.Headers) error {
+	var err error
+	for k, v := range heads {
+		_, err = fmt.Fprintf(w, "%s: %s\r\n", k, v)
+	}
+	_, err = fmt.Fprint(w, "\r\n")
+	if err != nil { log.Fatalf("Error writing headers: %s\n", err) }
+	return err
 }

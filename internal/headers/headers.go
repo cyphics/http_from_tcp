@@ -13,6 +13,20 @@ func NewHeaders() Headers {
 	return make(Headers)
 }
 
+func (h Headers) Get(key string) (string, bool)  {
+	value, exists := h[strings.ToLower(key)]
+	return value, exists
+}
+
+func (h Headers) Set(key string, value string) {
+	old, exists := h.Get(key)
+	if exists {
+		h[key] = old + "; " + value
+	} else {
+		h[key] = value
+	}
+}
+
 func (h Headers) Replace(key string, value string) {
 	h[strings.ToLower(key)] = value
 }
@@ -37,7 +51,6 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if !found {
 		return 0, false, nil
 	}
-	// fmt.Printf("Parsing header segment \"%s\"\n", fieldLine)
 	parsedBytes := len(fieldLine) 
 	if len(fieldLine) > 0 {
 		if fieldLine[0] == ' ' {
@@ -51,19 +64,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		if err != nil { return 0, false, err }
 		fieldValue = strings.Trim(fieldValue, " ")
 		fieldKey = strings.ToLower(fieldKey)
-		old, exists := h.Get(fieldKey)
-		if exists {
-			h[fieldKey] = old + "; " + fieldValue
-		} else {
-			h[fieldKey] = fieldValue
-		}
-		// fmt.Printf("Parsed sequence %s (%d)\n", fieldLine, parsedBytes)
+		h.Set(fieldKey, fieldValue)
 	}
 	return parsedBytes+2, false, nil
-}
-
-// Get returns the value of the header key, ensuring lower case
-func (h Headers) Get(key string) (string, bool)  {
-	value, exists := h[strings.ToLower(key)]
-	return value, exists
 }

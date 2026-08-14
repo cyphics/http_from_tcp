@@ -64,21 +64,22 @@ func basicHandler (w *response.Writer, req *request.Request) {
 	w.WriteBody([]byte(msg))
 }
 
-func handleChunkedBody(w *response.Writer, body *io.ReadCloser) {
+func handleChunkedBody(w *response.Writer, body io.ReadCloser) {
 	buffer := make([]byte, 1024)
 	for {
 		n, err := body.Read(buffer)
-		if err != nil && err != io.EOF { 
-			log.Fatalf("Error reading from httpbin response: %s\n", err.Error()) 
-		}
 		if err == io.EOF {
-			w.WriteChunkedBodyDone() 
+			w.WriteChunkedBodyDone(false) 
 			break
+		}
+		if err != nil { 
+			log.Fatalf("Error reading from httpbin response: %s\n", err.Error()) 
 		} else {
 			w.WriteChunkedBody(buffer[:n])
 		}
 	}
 }
+
 func chunkedHandler(w *response.Writer, res *http.Response) {
 	fmt.Println("Handling chunks")
 	headers := response.GetDefaultHeaders(0)
@@ -93,30 +94,45 @@ func trailerHandler(w *response.Writer, res *http.Response) {
 	fmt.Println("Handling trailers")
 	heads := response.GetDefaultHeaders(0)
 	heads.Replace("content-type", "text/plain")
-	headers["transfer-encoding"] = "chunked"
+	heads["transfer-encoding"] = "chunked"
 	heads["trailer"] = "X-Content-SHA256, X-Content-Length"
 	w.WriteHeaders(heads)
-	buffer := make([]byte, 4096)
-	r, err := res.Body.Read(buffer)
-	if err != nil {
-		fmt.Errorf("Error reading body: ", err)
+	fullBuffer := make([]byte, 0)
+	written := 0
+	for {
+		tmpBuffer := make([]byte, 1024)
+		r, err := res.Body.Read(tmpBuffer)
+		if err == io.EOF {
+			fullBuffer = append(fullBuffer, tmpBuffer[:r]...)
+			written += r
+			break
+		}
+		if err != nil {
+			log.Fatalf("Error reading body: %s", err.Error())
+			// fmt.Errorf("Error reading body: ", err)
+			break
+		}
+		fullBuffer = append(fullBuffer, tmpBuffer[:r]...)
+		written += r
 	}
-	// fmt.Printf("Writing buffer: \n%s\n", buffer)
-	w.WriteBody(buffer[:r])
-	sha := sha256.Sum256(buffer)
+	_, err := w.WriteChunkedBody(fullBuffer[:written])
+	w.WriteChunkedBodyDone(true)
+	
+	if err != nil {
+		log.Fatalf("Error writing body: %s", err.Error())
+	}
+
+	sha := sha256.Sum256(fullBuffer)
 	trailers := headers.NewHeaders()
-	trailers["X-Content-Length"] = fmt.Sprintf("%d", len(buffer))
-	trailers["X-Content-SHA256"] = fmt.Sprintf("%x", sha)
+	trailers.Set("X-Content-SHA256", fmt.Sprintf("%x", sha))
+	trailers.Set("X-Content-Length", fmt.Sprintf("%d", len(fullBuffer)))
 	w.WriteTrailers(trailers)
 }
 
 func httpbingoHandler(w *response.Writer, req *request.Request) {
 	target := req.RequestLine.RequestTarget
-	fmt.Printf("Target: %s\n", target)
-	path := strings.TrimPrefix(target, "/httpbingo")
-	fmt.Printf("Path: %s\n", path)
-	url := fmt.Sprintf("https://httpbingo.org/%s", path)
-	fmt.Printf("URL: %s\n", url)
+	path   := strings.TrimPrefix(target, "/httpbin")
+	url    := fmt.Sprintf("https://httpbingo.org/%s", path)
 	res, err := http.Get(url)
 	w.WriteStatusLine(response.StatusCode(res.StatusCode))
 	if err != nil { log.Fatalf("Error forwarding to httpbin: %s\n", err.Error()) }
@@ -131,7 +147,7 @@ func httpbingoHandler(w *response.Writer, req *request.Request) {
 
 func handle(w *response.Writer, req *request.Request) {
 	target := req.RequestLine.RequestTarget
-	if strings.HasPrefix(target, "/httpbingo") {
+	if strings.HasPrefix(target, "/httpbin") {
 		httpbingoHandler(w, req)
 	} else {
 		basicHandler(w, req)
