@@ -145,10 +145,27 @@ func httpbingoHandler(w *response.Writer, req *request.Request) {
 	}
 }
 
+func videoHandler(w *response.Writer, req *request.Request) {
+	fmt.Println("Handling video")
+	video, err := os.ReadFile("assets/vim.mp4")
+	if err != nil {
+		log.Fatalf("error reading video: %s", err.Error())
+	}
+	headers := response.GetDefaultHeaders(0)
+	headers["transfer-encoding"] = "chunked"
+	headers.Replace("content-type", "video/mp4")
+	w.WriteStatusLine(response.StatusOK)
+	w.WriteHeaders(headers)
+	w.WriteChunkedBody(video)
+	w.WriteChunkedBodyDone(false)
+}
+
 func handle(w *response.Writer, req *request.Request) {
 	target := req.RequestLine.RequestTarget
 	if strings.HasPrefix(target, "/httpbin") {
 		httpbingoHandler(w, req)
+	} else if strings.HasPrefix(target, "/video") {
+		videoHandler(w, req)
 	} else {
 		basicHandler(w, req)
 	}
